@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/player", "destination": "/index.html" },
+    { "source": "/api/:path*", "destination": "/api/proxy.js" }
+  ]
+}
