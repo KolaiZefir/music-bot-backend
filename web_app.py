@@ -1,9 +1,9 @@
-import setuptools
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
 import os
 import sys
-import io
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+import telegram
+from telegram.ext import Dispatcher, CommandHandler
 from database import MusicDatabase
 from config import Config
 
@@ -11,7 +11,8 @@ from config import Config
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 app = Flask(__name__)
-# Настраиваем CORS для работы с Vercel
+
+# Настройка CORS
 CORS(app, origins=[
     "https://music-frontend.vercel.app",
     "http://localhost:3000",
@@ -21,6 +22,26 @@ CORS(app, origins=[
 # Инициализация базы данных
 db = MusicDatabase()
 
+# ---------- НАСТРОЙКА БОТА ----------
+TOKEN = "8496222715:AAF5Yrq4VqWS9KNixjjT_wKInY1OBF9p0lk"
+bot = telegram.Bot(token=TOKEN)
+dispatcher = Dispatcher(bot, None, use_context=True)
+
+# Обработчик команды /start
+def start(update, context):
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="Привет! Я бот-плеер. Нажми кнопку ниже, чтобы открыть плеер:",
+        reply_markup={
+            "inline_keyboard": [[
+                {"text": "🎵 Открыть плеер", "web_app": {"url": "https://music-frontend.vercel.app"}}
+            ]]
+        }
+    )
+
+dispatcher.add_handler(CommandHandler("start", start))
+
+# ---------- ЭНДПОИНТЫ ДЛЯ ПЛЕЕРА ----------
 @app.route('/', methods=['GET'])
 def index():
     return jsonify({
@@ -36,11 +57,10 @@ def index():
     })
 
 @app.route('/tracks', methods=['GET'])
-def get_tracks()
+def get_tracks():
     """Получить все треки"""
     try:
         tracks = db.get_all_tracks()
-        # Конвертируем в список для JSON
         tracks_list = []
         for track in tracks:
             tracks_list.append({
@@ -80,19 +100,15 @@ def play_track(track_id):
         track = db.get_track(track_id)
         if not track:
             return jsonify({'error': 'Track not found'}), 404
-        
+
         file_path = track[3]
-        
-        # Проверяем существование файла
         if not os.path.exists(file_path):
-            # Ищем файл в директории downloads
             possible_path = os.path.join('downloads', os.path.basename(file_path))
             if os.path.exists(possible_path):
                 file_path = possible_path
             else:
                 return jsonify({'error': 'File not found'}), 404
-        
-        # Отправляем файл для воспроизведения
+
         return send_file(
             file_path,
             mimetype='audio/mpeg',
@@ -109,16 +125,15 @@ def download_track(track_id):
         track = db.get_track(track_id)
         if not track:
             return jsonify({'error': 'Track not found'}), 404
-        
+
         file_path = track[3]
-        
         if not os.path.exists(file_path):
             possible_path = os.path.join('downloads', os.path.basename(file_path))
             if os.path.exists(possible_path):
                 file_path = possible_path
             else:
                 return jsonify({'error': 'File not found'}), 404
-        
+
         return send_file(
             file_path,
             mimetype='audio/mpeg',
@@ -135,7 +150,7 @@ def search_tracks():
         query = request.args.get('q', '')
         if not query:
             return jsonify([])
-        
+
         tracks = db.search_tracks(query)
         tracks_list = []
         for track in tracks:
@@ -154,39 +169,16 @@ def search_tracks():
 @app.route('/static/default-cover.jpg')
 def default_cover():
     """Заглушка для обложки"""
-    # Здесь можно вернуть стандартную картинку
-    # Пока возвращаем 404
     return '', 404
 
-import telegram
-from telegram.ext import Dispatcher, CommandHandler, MessageHandler, Filters
-
-# Токен бота
-TOKEN = "8496222715:AAF5Yrq4VqWS9KNixjjT_wKInY1OBF9p0lk"
-bot = telegram.Bot(token=TOKEN)
-dispatcher = Dispatcher(bot, None, use_context=True)
-
-# Обработчик команды /start
-def start(update, context):
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text="Привет! Я бот-плеер. Нажми кнопку ниже, чтобы открыть плеер:",
-        reply_markup={
-            "inline_keyboard": [[
-                {"text": "🎵 Открыть плеер", "web_app": {"url": "https://music-frontend.vercel.app"}}
-            ]]
-        }
-    )
-
-# Регистрируем обработчики
-dispatcher.add_handler(CommandHandler("start", start))
-
-# Эндпоинт для вебхука (ОБЯЗАТЕЛЬНО ДОБАВИТЬ!)
+# ---------- ВЕБХУК ДЛЯ ТЕЛЕГРАМА ----------
 @app.route('/webhook', methods=['POST'])
 def webhook():
     update = telegram.Update.de_json(request.get_json(force=True), bot)
     dispatcher.process_update(update)
     return 'ok', 200
 
+# ---------- ЗАПУСК ----------
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
