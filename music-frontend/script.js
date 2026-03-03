@@ -1,11 +1,12 @@
 // Конфигурация
 const API_URL = 'https://music-bot-backend-ng9f.onrender.com';
+// Для локальной разработки раскомментируйте:
+// const API_URL = 'http://localhost:5000';
 
 // Состояние плеера
 let currentTrack = null;
-let isPlaying = false;
-let audio = new Audio();
 let tracks = [];
+let audio = new Audio();
 
 // DOM элементы
 const searchInput = document.getElementById('search-input');
@@ -26,6 +27,9 @@ const albumArt = document.getElementById('album-art');
 async function loadTracks() {
     try {
         const response = await fetch(`${API_URL}/tracks`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         tracks = await response.json();
         displayTracks(tracks);
     } catch (error) {
@@ -38,14 +42,18 @@ async function loadTracks() {
 function displayTracks(tracksToShow) {
     tracksList.innerHTML = '';
     
-    if (tracksToShow.length === 0) {
-        tracksList.innerHTML = '<div class="no-tracks">Треки не найдены</div>';
+    if (!tracksToShow || tracksToShow.length === 0) {
+        tracksList.innerHTML = '<div class="loading">Треки не найдены</div>';
         return;
     }
     
     tracksToShow.forEach(track => {
         const trackElement = document.createElement('div');
         trackElement.className = 'track-item';
+        if (currentTrack && currentTrack.id === track.id) {
+            trackElement.classList.add('active');
+        }
+        
         trackElement.innerHTML = `
             <img src="${track.cover_url || 'https://via.placeholder.com/50'}" alt="cover">
             <div class="track-info">
@@ -81,8 +89,7 @@ async function searchTracks() {
 // Воспроизведение трека
 async function playTrack(track) {
     try {
-        if (currentTrack?.id === track.id) {
-            // Если это тот же трек, просто переключаем воспроизведение
+        if (currentTrack && currentTrack.id === track.id) {
             togglePlay();
             return;
         }
@@ -92,14 +99,11 @@ async function playTrack(track) {
         trackArtist.textContent = track.artist;
         albumArt.src = track.cover_url || 'https://via.placeholder.com/300';
         
-        // Устанавливаем источник аудио
         audio.src = `${API_URL}/track/${track.id}/play`;
         audio.load();
         
-        // Воспроизводим
         await audio.play();
-        isPlaying = true;
-        updatePlayPauseButton();
+        updatePlayPauseButton(true);
         
         // Обновляем активный трек в списке
         document.querySelectorAll('.track-item').forEach(item => {
@@ -116,19 +120,18 @@ async function playTrack(track) {
 function togglePlay() {
     if (!currentTrack) return;
     
-    if (isPlaying) {
-        audio.pause();
-    } else {
+    if (audio.paused) {
         audio.play();
+        updatePlayPauseButton(true);
+    } else {
+        audio.pause();
+        updatePlayPauseButton(false);
     }
-    isPlaying = !isPlaying;
-    updatePlayPauseButton();
 }
 
 // Обновление кнопки play/pause
-function updatePlayPauseButton() {
-    const icon = playPauseBtn.querySelector('i');
-    icon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
+function updatePlayPauseButton(isPlaying) {
+    playPauseBtn.innerHTML = isPlaying ? '⏸️' : '▶️';
 }
 
 // Предыдущий трек
@@ -151,7 +154,7 @@ function nextTrack() {
 
 // Форматирование времени
 function formatTime(seconds) {
-    if (!seconds) return '0:00';
+    if (!seconds || isNaN(seconds)) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
