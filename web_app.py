@@ -3,9 +3,8 @@ import sys
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import telegram
-from telegram.ext import Dispatcher, CommandHandler
+from telegram.ext import Application, CommandHandler
 from database import MusicDatabase
-from config import Config
 
 # Добавляем путь к проекту
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -25,11 +24,13 @@ db = MusicDatabase()
 # ---------- НАСТРОЙКА БОТА ----------
 TOKEN = "8496222715:AAF5Yrq4VqWS9KNixjjT_wKInY1OBF9p0lk"
 bot = telegram.Bot(token=TOKEN)
-dispatcher = Dispatcher(bot, None, use_context=True)
+
+# Создаем приложение и диспетчер
+application = Application.builder().token(TOKEN).build()
 
 # Обработчик команды /start
-def start(update, context):
-    context.bot.send_message(
+async def start(update, context):
+    await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text="Привет! Я бот-плеер. Нажми кнопку ниже, чтобы открыть плеер:",
         reply_markup={
@@ -39,7 +40,7 @@ def start(update, context):
         }
     )
 
-dispatcher.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("start", start))
 
 # ---------- ЭНДПОИНТЫ ДЛЯ ПЛЕЕРА ----------
 @app.route('/', methods=['GET'])
@@ -173,10 +174,10 @@ def default_cover():
 
 # ---------- ВЕБХУК ДЛЯ ТЕЛЕГРАМА ----------
 @app.route('/webhook', methods=['POST'])
-def webhook():
+async def webhook():
     """Обработчик сообщений от Telegram"""
     update = telegram.Update.de_json(request.get_json(force=True), bot)
-    dispatcher.process_update(update)
+    await application.process_update(update)
     return 'ok', 200
 
 # ---------- ЗАПУСК ----------
