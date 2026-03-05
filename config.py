@@ -21,4 +21,7 @@ SSL_KEY = 'key.pem'
 print("="*50)
 print(f"✅ Локальный IP: {LOCAL_IP}")
 print(f"🌐 URL плеера: {APP_URL}/player")
+
 print("="*50)
+# Добавь эту строку!
+RENDER_EXTERNAL_URL = "https://music-bot-final-51qb.onrender.com"
